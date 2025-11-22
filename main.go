@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/DavidHoenisch/oxidation9/internal/models"
-	"github.com/DavidHoenisch/oxidation9/pkg/spam"
 	"log"
 	"os"
+	"path/filepath"
+
+	"github.com/DavidHoenisch/oxidation9/internal/types"
+	"github.com/DavidHoenisch/oxidation9/pkg/spam"
 )
 
 func getHomePath() string {
@@ -13,7 +15,6 @@ func getHomePath() string {
 	if homeErr != nil {
 		log.Print(homeErr)
 	}
-
 	return path
 }
 
@@ -22,63 +23,87 @@ func getExecutablePath() string {
 	if execErr != nil {
 		log.Print(execErr)
 	}
-
 	return path
-
 }
 
-var funcMap = map[string]func(models.FuncParams) error{
-	"spam": func(params models.FuncParams) error {
-		return spam.Run(params)
-	},
+var funcMap = map[string]types.Tool{
+	"spam": &spam.Spam{},
 }
 
 func main() {
 	if len(os.Args) < 1 {
-		log.Println("not enough args")
+		return
 	}
 
-	caller := os.Args[0]
+	binaryName := filepath.Base(os.Args[0])
 
-	switch caller {
-	case "oxidation9", "ox9", "./oxidation9":
-		args := os.Args[1]
-		switch args {
+	switch binaryName {
+
+	case "oxidation9", "ox9":
+		if len(os.Args) < 2 {
+			fmt.Println("Usage: oxidation9 <command> [flags]")
+			os.Exit(1)
+		}
+
+		subCommand := os.Args[1]
+
+		switch subCommand {
 		case "bootstrap":
-			ePath := getExecutablePath()
-			hPath := getHomePath()
-			for key, _ := range funcMap {
-				binPath := fmt.Sprintf("%s/.local/bin/%s", hPath, key)
-
-				err := os.Symlink(ePath, binPath)
-				if err != nil {
-					log.Print(err)
-				}
-			}
+			runBootstrap()
 		case "clean":
-			hPath := getHomePath()
-			for key, _ := range funcMap {
-				binPath := fmt.Sprintf("%s/.local/bin/%s", hPath, key)
-
-				err := os.Remove(binPath)
-				if err != nil {
-					log.Print(err)
-				}
-			}
+			runClean()
+		case "spam":
+			runTool("spam", os.Args[2:])
 		default:
-			fmt.Println("Unknown command")
+			fmt.Printf("Unknown command: %s\n", subCommand)
+			os.Exit(1)
 		}
+
 	case "spam":
-		err := funcMap["spam"](models.FuncParams{
-			Args: map[string]any{
-				"count": os.Args[1],
-				"url":   os.Args[2],
-			},
-		})
-		if err != nil {
-			fmt.Println("something")
-		}
+		runTool("spam", os.Args[1:])
+
 	default:
-		fmt.Println("Unknown command")
+		if _, ok := funcMap[binaryName]; ok {
+			runTool(binaryName, os.Args[1:])
+		} else {
+			fmt.Println("Unknown binary name or command")
+			os.Exit(1)
+		}
+	}
+}
+
+func runTool(name string, args []string) {
+	tool := funcMap[name]
+
+	err := tool.Handler(args)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+func runBootstrap() {
+	ePath := getExecutablePath()
+	hPath := getHomePath()
+	for key := range funcMap {
+		binPath := fmt.Sprintf("%s/.local/bin/%s", hPath, key)
+		err := os.Symlink(ePath, binPath)
+		if os.IsExist(err) {
+			continue
+		}
+		if err != nil {
+			log.Print(err)
+		}
+	}
+}
+
+func runClean() {
+	hPath := getHomePath()
+	for key := range funcMap {
+		binPath := fmt.Sprintf("%s/.local/bin/%s", hPath, key)
+		err := os.Remove(binPath)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 }
