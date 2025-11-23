@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/DavidHoenisch/oxidation9/internal/types"
+	"github.com/DavidHoenisch/oxidation9/pkg/dns"
 	"github.com/DavidHoenisch/oxidation9/pkg/spam"
 )
 
@@ -28,6 +29,7 @@ func getExecutablePath() string {
 
 var funcMap = map[string]types.Tool{
 	"spam": &spam.Spam{},
+	"dns":  &dns.Dns{},
 }
 
 func main() {
@@ -54,6 +56,8 @@ func main() {
 			runClean()
 		case "spam":
 			runTool("spam", os.Args[2:])
+		case "dns":
+			runTool("dns", os.Args[2:])
 		default:
 			fmt.Printf("Unknown command: %s\n", subCommand)
 			os.Exit(1)
@@ -61,7 +65,8 @@ func main() {
 
 	case "spam":
 		runTool("spam", os.Args[1:])
-
+	case "dns":
+		runTool("dns", os.Args[1:])
 	default:
 		if _, ok := funcMap[binaryName]; ok {
 			runTool(binaryName, os.Args[1:])
@@ -89,11 +94,13 @@ func runBootstrap() {
 		binPath := fmt.Sprintf("%s/.local/bin/%s", hPath, key)
 		err := os.Symlink(ePath, binPath)
 		if os.IsExist(err) {
+			fmt.Printf("%s already boostrapped...skipping\n", key)
 			continue
 		}
 		if err != nil {
-			log.Print(err)
+			fmt.Printf("Error bootstrapping %s: %v", key, err)
 		}
+		fmt.Printf("Bootstrapped %s\n", key)
 	}
 }
 
@@ -105,5 +112,6 @@ func runClean() {
 		if err != nil {
 			log.Print(err)
 		}
+		fmt.Printf("Cleaned %s\n", key)
 	}
 }
